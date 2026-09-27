@@ -7,6 +7,31 @@ including **romhack saves that PKHeX can't open**.
 
 ![Swift 6](https://img.shields.io/badge/Swift-6.0-orange) ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-blue) ![MIT](https://img.shields.io/badge/license-MIT-green)
 
+## Install
+
+**Download** — get `Hexeon.zip` from
+[Releases](https://github.com/Ykingdev/pkmnmacoshex/releases/latest), unzip, and
+drag `Hexeon.app` into Applications. Requires macOS 14 or later, Apple silicon or
+Intel.
+
+macOS will refuse to open it the first time. The app is ad-hoc signed but not
+notarized — that needs a paid Apple Developer account — so Gatekeeper treats it
+as unidentified. Once, either:
+
+- right-click `Hexeon.app` → **Open** → **Open** in the dialog, or
+- `xattr -dr com.apple.quarantine /Applications/Hexeon.app`
+
+After that it launches normally.
+
+**Or build it** — no dependencies beyond Xcode:
+
+```bash
+git clone https://github.com/Ykingdev/pkmnmacoshex.git
+cd pkmnmacoshex
+./Scripts/bundle-app.sh     # writes build/Hexeon.app, icon and all
+open build/Hexeon.app
+```
+
 ## Why this exists
 
 **There is no macOS build of PKHeX.** It's a .NET Windows Forms application, so
