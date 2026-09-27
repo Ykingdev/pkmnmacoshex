@@ -13,6 +13,11 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/Hexeon"
 
+# Icon is drawn from code, so there is no binary asset to keep in the repo.
+swift Scripts/make-icon.swift >/dev/null
+iconutil -c icns build/AppIcon.iconset -o build/AppIcon.icns
+cp build/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+
 # SwiftPM puts resources in a side-car bundle; Bundle.module needs it alongside
 # the executable, so carry it into the app.
 BUILD_DIR="$(swift build -c "$CONFIG" --show-bin-path)"
@@ -29,6 +34,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleDisplayName</key><string>Hexeon</string>
   <key>CFBundleIdentifier</key><string>dev.local.hexeon</string>
   <key>CFBundleExecutable</key><string>Hexeon</string>
+  <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>0.1.0</string>
   <key>CFBundleVersion</key><string>1</string>

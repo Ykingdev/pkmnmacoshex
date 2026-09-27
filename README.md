@@ -1,5 +1,7 @@
 # Hexeon
 
+<img src="docs/icon.png" width="128" align="right" alt="Hexeon icon">
+
 A small, native macOS save editor for Game Boy Advance Pokémon saves — including
 **romhack saves that PKHeX refuses to open**.
 
@@ -196,8 +198,13 @@ Item/bag editing, box numbers and names, legality checks, species and move
 ```bash
 swift build             # library + app
 swift test              # 26 tests, no save file or ROM required
-./Scripts/bundle-app.sh # produces build/Hexeon.app
+./Scripts/bundle-app.sh # produces build/Hexeon.app, icon included
+swift Scripts/make-icon.swift   # redraw the icon on its own
 ```
+
+The icon is drawn in code with CoreGraphics (`Scripts/make-icon.swift`) rather
+than checked in as an image — a fan rendition of a Master Ball, not artwork taken
+from the games.
 
 Validate against your own save without committing it anywhere:
 
