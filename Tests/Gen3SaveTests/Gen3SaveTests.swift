@@ -30,36 +30,61 @@ struct SaveBuilder {
                          species: UInt16, level: UInt8, nickname: String,
                          encoding: MonEncoding) {
         let base = offset(slot: slot, sectionID: 1, rotation: rotation)
-        bytes[base + Gen3Mon.partyCountOffset] = 1
-        let mon = base + Gen3Mon.partyOffset
+        bytes[base + 0x34] = 1
+        writeMon(at: base + 0x38, pid: pid, otid: otid, species: species,
+                 level: level, nickname: nickname, encoding: encoding,
+                 storage: .party)
+    }
+
+    /// PC entries start 4 bytes into section 5 (after the current-box index) and
+    /// repeat at the storage stride.
+    mutating func addBoxMon(slot: Int, rotation: Int, index: Int, pid: UInt32,
+                            otid: UInt32, species: UInt16, nickname: String,
+                            encoding: MonEncoding, storage: MonStorage) {
+        let base = offset(slot: slot, sectionID: 5, rotation: rotation)
+        writeMon(at: base + 4 + index * storage.totalSize, pid: pid, otid: otid,
+                 species: species, level: 0, nickname: nickname,
+                 encoding: encoding, storage: storage)
+    }
+
+    mutating func writeMon(at mon: Int, pid: UInt32, otid: UInt32, species: UInt16,
+                           level: UInt8, nickname: String, encoding: MonEncoding,
+                           storage: MonStorage) {
         write(pid, at: mon)
         write(otid, at: mon + 4)
         bytes.replaceSubrange((mon + 8)..<(mon + 18),
                               with: Gen3Text.encode(nickname, length: 10))
         bytes.replaceSubrange((mon + 0x14)..<(mon + 0x1B),
                               with: Gen3Text.encode("Shin", length: 7))
-        var payload = [UInt8](repeating: 0, count: 48)
+        bytes[mon + 0x12] = 2   // language
+        var payload = [UInt8](repeating: 0, count: storage.payloadSize)
         payload[0] = UInt8(species & 0xFF)
         payload[1] = UInt8(species >> 8)
         payload[4] = 0xA0; payload[5] = 0x0E          // experience
         payload[9] = 90                               // friendship
-        payload[12] = 33                              // Tackle
-        payload[24] = 13                              // an EV, so the block isn't all zero
-        bytes[mon + 0x54] = level
-        write(UInt16(45), at: mon + 0x56)
-        write(UInt16(45), at: mon + 0x58)
+        if storage.payloadSize == 48 {
+            payload[12] = 33                          // Tackle
+            payload[24] = 13                          // an EV, so the block isn't all zero
+        }
+        if storage.hasStatusBlock {
+            bytes[mon + 0x54] = level
+            write(UInt16(45), at: mon + 0x56)
+            write(UInt16(45), at: mon + 0x58)
+        }
 
+        let usesChecksum = storage.payloadOffset >= 0x20
         switch encoding {
         case .plain:
-            bytes.replaceSubrange((mon + 0x20)..<(mon + 0x50), with: payload)
-            write(UInt16(0), at: mon + 0x1C)
+            bytes.replaceSubrange((mon + storage.payloadOffset)..<(mon + storage.payloadOffset + storage.payloadSize),
+                                  with: payload)
+            if usesChecksum { write(UInt16(0), at: mon + 0x1C) }
         case .vanilla:
             var sum: UInt32 = 0
             for i in stride(from: 0, to: 48, by: 2) {
                 sum &+= UInt32(payload[i]) | UInt32(payload[i + 1]) << 8
             }
             write(UInt16(sum & 0xFFFF), at: mon + 0x1C)
-            let order = Array(Gen3Mon.substructOrder[Int(pid % 24)])
+                let order = Array(Gen3Mon.substructOrder[Int(pid % 24)])
             var shuffled = [UInt8](repeating: 0, count: 48)
             for (slotIndex, kind) in order.enumerated() {
                 let source = ["G", "A", "E", "M"].firstIndex(of: String(kind))! * 12
@@ -68,7 +93,7 @@ struct SaveBuilder {
             }
             let key = pid ^ otid
             for i in stride(from: 0, to: 48, by: 4) {
-                write(Gen3Checksum.load32(shuffled, i) ^ key, at: mon + 0x20 + i)
+                write(Gen3Checksum.load32(shuffled, i) ^ key, at: mon + storage.payloadOffset + i)
             }
         }
     }
@@ -122,7 +147,7 @@ private func unboundLikeSave(encoding: MonEncoding = .plain,
     let before = try #require(save.party.first)
     let original = save.bytes
 
-    try save.setShiny(partyIndex: 0, true)
+    try save.setShiny(save.party[0], true)
     let after = try #require(save.party.first)
 
     #expect(after.isShiny)
@@ -147,7 +172,7 @@ private func unboundLikeSave(encoding: MonEncoding = .plain,
     #expect(save.encoding == .vanilla)
     let before = try #require(save.party.first)
 
-    try save.setShiny(partyIndex: 0, true)
+    try save.setShiny(save.party[0], true)
     let after = try #require(save.party.first)
 
     #expect(after.isShiny)
@@ -158,7 +183,8 @@ private func unboundLikeSave(encoding: MonEncoding = .plain,
     #expect(after.friendship == before.friendship)
     // And the game's own payload checksum agrees with the plaintext.
     let payload = Gen3Mon.payload(bytes: save.bytes, offset: after.offset,
-                                  pid: after.pid, otid: after.otid, encoding: .vanilla)
+                                  pid: after.pid, otid: after.otid,
+                                  encoding: .vanilla, storage: .party)
     var sum: UInt32 = 0
     for i in stride(from: 0, to: 48, by: 2) {
         sum &+= UInt32(payload[i]) | UInt32(payload[i + 1]) << 8
@@ -170,9 +196,9 @@ private func unboundLikeSave(encoding: MonEncoding = .plain,
 
 @Test func shinyCanBeUndone() throws {
     var save = try unboundLikeSave()
-    try save.setShiny(partyIndex: 0, true)
+    try save.setShiny(save.party[0], true)
     #expect(try #require(save.party.first).isShiny)
-    try save.setShiny(partyIndex: 0, false)
+    try save.setShiny(save.party[0], false)
     let mon = try #require(save.party.first)
     #expect(mon.isShiny == false)
     #expect(save.validatesChecksums(slot: save.activeSlot))
@@ -204,12 +230,14 @@ func realSaveMatchesKnownGoodOutput() throws {
     var save = try Gen3SaveFile(contentsOf: URL(fileURLWithPath: env["HEXEON_TEST_SAVE"]!))
     let index = Int(env["HEXEON_TEST_INDEX"] ?? "0") ?? 0
 
-    print("magic \(String(format: "%08X", save.magic)) · \(save.encoding.rawValue) · active slot \(save.activeSlot)")
-    for mon in save.party {
-        print("  \(mon.id + 1). \(mon.nickname) species=\(mon.species) Lv\(mon.level) sv=\(mon.shinyValue)")
+    print("magic \(String(format: "%08X", save.magic)) · \(save.encoding.rawValue) · slot \(save.activeSlot) · PC slots \(save.boxStorage?.totalSize ?? 0)B")
+    for mon in save.allMons {
+        let where_ = mon.isParty ? "party" : "PC   "
+        let level = mon.level.map { " Lv\($0)" } ?? ""
+        print("  \(where_) \(mon.slotNumber). \(mon.nickname) species=\(mon.species)\(level) sv=\(mon.shinyValue)\(mon.isShiny ? " SHINY" : "")")
     }
 
-    try save.setShiny(partyIndex: index, true)
+    try save.setShiny(save.party[index], true)
     #expect(save.party[index].isShiny)
     #expect(save.validatesChecksums(slot: save.activeSlot))
 
@@ -217,4 +245,77 @@ func realSaveMatchesKnownGoodOutput() throws {
         let reference = [UInt8](try Data(contentsOf: URL(fileURLWithPath: expected)))
         #expect(save.bytes == reference, "output differs from the known-good file")
     }
+}
+
+
+// MARK: - PC storage
+
+/// Unbound stores PC entries in 58 bytes with the payload at +0x1C; vanilla uses
+/// 80 bytes at +0x20. Hexeon has to work out which from the bytes alone.
+private func saveWithBox(storage: MonStorage, encoding: MonEncoding,
+                         count: Int = 3) throws -> Gen3SaveFile {
+    var builder = SaveBuilder()
+    let names = ["Flabébé", "Cutiefly", "Slowpoke"]
+    let species: [UInt16] = [840, 959, 79]
+    for slot in 0..<2 {
+        let rotation = slot == 0 ? 4 : 5
+        builder.addMon(slot: slot, rotation: rotation, pid: 0xB8D2_A29D, otid: 0x8DAE_A1FF,
+                       species: 398, level: 17, nickname: "Beldum", encoding: encoding)
+        for i in 0..<count {
+            builder.addBoxMon(slot: slot, rotation: rotation, index: i,
+                              pid: 0x5ABA_B859 &+ UInt32(i &* 7919), otid: 0x8DAE_A1FF,
+                              species: species[i], nickname: names[i],
+                              encoding: encoding, storage: storage)
+        }
+    }
+    return try Gen3SaveFile(bytes: builder.finalize())
+}
+
+@Test(arguments: [(MonStorage.boxCompact, MonEncoding.plain),
+                  (MonStorage.boxVanilla, MonEncoding.vanilla)])
+func detectsPCLayoutFromTheBytes(storage: MonStorage, encoding: MonEncoding) throws {
+    let save = try saveWithBox(storage: storage, encoding: encoding)
+    #expect(save.encoding == encoding)
+    #expect(save.boxStorage == storage)
+    #expect(save.boxes.count == 3)
+    #expect(save.boxes.map(\.species) == [840, 959, 79])
+    #expect(save.boxes.map(\.nickname) == ["Flabébé", "Cutiefly", "Slowpoke"])
+    #expect(save.boxes.allSatisfy { !$0.isParty })
+    #expect(save.boxes.allSatisfy { $0.level == nil })   // no status block in the PC
+    #expect(save.party.count == 1)                       // party still parsed separately
+}
+
+@Test(arguments: [(MonStorage.boxCompact, MonEncoding.plain),
+                  (MonStorage.boxVanilla, MonEncoding.vanilla)])
+func shinyWorksOnPCPokemonToo(storage: MonStorage, encoding: MonEncoding) throws {
+    var save = try saveWithBox(storage: storage, encoding: encoding)
+    let before = save.boxes[1]
+    let neighbours = [save.boxes[0].pid, save.boxes[2].pid]
+    #expect(before.isShiny == false)
+
+    try save.setShiny(before, true)
+    let after = save.boxes[1]
+
+    #expect(after.isShiny)
+    #expect(after.species == before.species)
+    #expect(after.nickname == before.nickname)
+    #expect(after.nature == before.nature)
+    #expect(after.experience == before.experience)
+    #expect(save.validatesChecksums(slot: save.activeSlot))
+    #expect(save.validatesChecksums(slot: 0))
+    // Its neighbours in the PC are untouched.
+    #expect([save.boxes[0].pid, save.boxes[2].pid] == neighbours)
+    #expect(save.boxes.count == 3)
+}
+
+@Test func emptyPCIsNotMistakenForPokemon() throws {
+    var builder = SaveBuilder()
+    builder.addMon(slot: 0, rotation: 4, pid: 0xB8D2_A29D, otid: 0x8DAE_A1FF,
+                   species: 398, level: 17, nickname: "Beldum", encoding: .plain)
+    builder.addMon(slot: 1, rotation: 5, pid: 0xB8D2_A29D, otid: 0x8DAE_A1FF,
+                   species: 398, level: 17, nickname: "Beldum", encoding: .plain)
+    let save = try Gen3SaveFile(bytes: builder.finalize())
+    #expect(save.boxes.isEmpty)
+    #expect(save.boxStorage == nil)
+    #expect(save.party.count == 1)
 }

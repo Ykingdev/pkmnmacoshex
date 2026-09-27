@@ -9,7 +9,7 @@ struct HexeonApp: App {
     var body: some Scene {
         WindowGroup("Hexeon") {
             ContentView(model: model)
-                .frame(minWidth: 640, minHeight: 420)
+                .frame(minWidth: 720, minHeight: 520)
         }
         .commands {
             CommandGroup(replacing: .newItem) {}
@@ -40,16 +40,21 @@ struct RawSaveDocument: FileDocument {
 }
 
 @Observable
+@MainActor
 final class SaveModel {
     var save: Gen3SaveFile?
+    var sprites = SpriteLibrary()
     var sourceName = ""
     var status = ""
     var failed = false
     var isDirty = false
     var isImporting = false
     var isExporting = false
+    /// Shows every Pokémon in its shiny colours without touching the save.
+    var previewShiny = false
 
     var party: [Gen3Mon] { save?.party ?? [] }
+    var boxed: [Gen3Mon] { save?.boxes ?? [] }
 
     func load(_ url: URL) {
         do {
@@ -58,7 +63,12 @@ final class SaveModel {
             sourceName = url.lastPathComponent
             isDirty = false
             failed = false
-            status = "Loaded slot \(file.activeSlot) — \(file.partyCount) in party."
+            var parts = ["slot \(file.activeSlot)", "\(file.partyCount) in party",
+                         "\(file.boxSlots.count) in PC"]
+            if file.skippedBoundarySlots > 0 {
+                parts.append("\(file.skippedBoundarySlots) PC slot(s) span a section boundary and were skipped")
+            }
+            status = "Loaded " + parts.joined(separator: ", ") + "."
         } catch {
             save = nil
             failed = true
@@ -66,23 +76,22 @@ final class SaveModel {
         }
     }
 
-    func setShiny(_ index: Int, _ shiny: Bool) {
+    func setShiny(_ mon: Gen3Mon, _ shiny: Bool) {
         guard var file = save else { return }
         do {
-            let before = file.party[index]
-            try file.setShiny(partyIndex: index, shiny)
-            let after = file.party[index]
+            try file.setShiny(mon, shiny)
             guard file.validatesChecksums(slot: file.activeSlot) else {
                 failed = true
                 status = "Refused: checksums did not validate after the edit."
                 return
             }
+            let updated = (file.party + file.boxes).first { $0.offset == mon.offset }
             save = file
             isDirty = true
             failed = false
             status = String(format: "%@: PID %08X → %08X, shiny value %d → %d. Nature and ability unchanged.",
-                            after.nickname.isEmpty ? "#\(after.species)" : after.nickname,
-                            before.pid, after.pid, before.shinyValue, after.shinyValue)
+                            mon.displayName, mon.pid, updated?.pid ?? 0,
+                            mon.shinyValue, updated?.shinyValue ?? 0)
         } catch {
             failed = true
             status = "\(error)"

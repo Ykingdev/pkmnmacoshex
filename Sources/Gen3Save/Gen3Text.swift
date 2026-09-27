@@ -7,8 +7,8 @@ public enum Gen3Text {
     public static let terminator: UInt8 = 0xFF
 
     private static let table: [UInt8: Character] = {
-        var t: [UInt8: Character] = [0x00: " ", 0xAB: "!", 0xAC: "?", 0xAD: ".",
-                                     0xAE: "-", 0xB8: ",", 0xBA: "/"]
+        var t: [UInt8: Character] = [0x00: " ", 0x1B: "é", 0xAB: "!", 0xAC: "?",
+                                     0xAD: ".", 0xAE: "-", 0xB8: ",", 0xBA: "/"]
         for n in 0..<10 { t[0xA1 + UInt8(n)] = Character(String(n)) }
         for n in 0..<26 {
             t[0xBB + UInt8(n)] = Character(UnicodeScalar(65 + n)!)
@@ -30,6 +30,19 @@ public enum Gen3Text {
             out.append(table[byte] ?? "\u{FFFD}")
         }
         return out
+    }
+
+    /// Whether a fixed-width name field holds real text: at least `minLength`
+    /// known characters, then a terminator. Used to tell a stored Pokémon apart
+    /// from arbitrary save bytes.
+    public static func isPrintable(_ raw: some Sequence<UInt8>, minLength: Int) -> Bool {
+        var count = 0
+        for byte in raw {
+            if byte == terminator { break }
+            guard table[byte] != nil else { return false }
+            count += 1
+        }
+        return count >= minLength
     }
 
     /// Encodes and pads to `length` with the terminator. Characters outside the
