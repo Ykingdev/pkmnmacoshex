@@ -2,15 +2,21 @@
 
 <img src="docs/icon.png" width="128" align="right" alt="Hexeon icon">
 
-A small, native macOS save editor for Game Boy Advance Pokémon saves — including
-**romhack saves that PKHeX refuses to open**.
+A small, **native macOS** save editor for Game Boy Advance Pokémon saves —
+including **romhack saves that PKHeX can't open**.
 
 ![Swift 6](https://img.shields.io/badge/Swift-6.0-orange) ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-blue) ![MIT](https://img.shields.io/badge/license-MIT-green)
 
 ## Why this exists
 
-PKHeX is excellent and you should use it for retail games. It assumes the
-vanilla Gen 3 save layout, though, and romhacks change that layout:
+**There is no macOS build of PKHeX.** It's a .NET Windows Forms application, so
+on a Mac the options are Wine, CrossOver, or a Windows VM — a lot of scaffolding
+to flip one byte in a save file. Hexeon is a normal Mac app: double-click, open a
+save, export it.
+
+The second reason is romhacks. PKHeX is excellent and you should use it for
+retail games, but it assumes the vanilla Gen 3 save layout, and romhacks change
+that layout:
 
 | | Vanilla FR/LG/E | Pokémon Unbound |
 |---|---|---|
@@ -25,9 +31,9 @@ Every one of those is detected from the file. You don't pick a game, and a hack
 Hexeon has never seen works as long as it reuses one of these shapes.
 
 Edit such a save with a vanilla-assuming tool and it writes *correct-looking*
-checksums over the *wrong* byte ranges. The game then rejects the slot as
-corrupt and silently rolls back to your previous save — which is exactly how
-this project started.
+checksums over the *wrong* byte ranges. The game then rejects the slot as corrupt
+and silently rolls back to your previous save — which is exactly how this project
+started: a Pokémon Unbound save, edited on a Mac, that the 3DS quietly refused.
 
 ## The trick: measure, don't assume
 
