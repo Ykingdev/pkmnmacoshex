@@ -7,5 +7,6 @@ build/
 *.gbavc.sav
 
 # Finder duplicates and the stray clone of this repo
-*\ 2.*
+* 2
+* 2.*
 /pkmnmacoshex/
