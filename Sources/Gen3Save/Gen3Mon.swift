@@ -18,16 +18,30 @@ public struct MonStorage: Sendable, Equatable {
     public let payloadOffset: Int
     public let payloadSize: Int
     public let hasStatusBlock: Bool
+    /// Field positions inside the payload. Nil means this layout packs the field
+    /// somewhere we haven't decoded, so it stays read-only rather than guessed at.
+    public let movesOffset: Int?
+    public let ppOffset: Int?
+    public let evsOffset: Int?
+    public let ivWordOffset: Int
 
     /// 80-byte core plus the 20-byte battle status block.
     public static let party = MonStorage(totalSize: 100, payloadOffset: 0x20,
-                                         payloadSize: 48, hasStatusBlock: true)
+                                         payloadSize: 48, hasStatusBlock: true,
+                                         movesOffset: 12, ppOffset: 20,
+                                         evsOffset: 24, ivWordOffset: 40)
     /// Vanilla PC entry: the same core, minus the status block.
     public static let boxVanilla = MonStorage(totalSize: 80, payloadOffset: 0x20,
-                                              payloadSize: 48, hasStatusBlock: false)
-    /// Unbound-style PC entry: no checksum field, 30-byte payload.
+                                              payloadSize: 48, hasStatusBlock: false,
+                                              movesOffset: 12, ppOffset: 20,
+                                              evsOffset: 24, ivWordOffset: 40)
+    /// Unbound-style PC entry: no checksum field and a 30-byte payload whose
+    /// middle 12 bytes (moves, PP, EVs) use a packing this project hasn't
+    /// decoded. The tail — pokérus, met location, origins, IVs — matches vanilla.
     public static let boxCompact = MonStorage(totalSize: 58, payloadOffset: 0x1C,
-                                             payloadSize: 30, hasStatusBlock: false)
+                                             payloadSize: 30, hasStatusBlock: false,
+                                             movesOffset: nil, ppOffset: nil,
+                                             evsOffset: nil, ivWordOffset: 26)
     public static let boxCandidates = [boxVanilla, boxCompact]
 
     /// Bytes that must be inside one section for us to read and re-PID an entry.
@@ -53,6 +67,9 @@ public struct Gen3Mon: Identifiable, Sendable {
     public let experience: UInt32
     public let friendship: UInt8
     public let moves: [UInt16]
+    public let pp: [UInt8]
+    public let evs: [UInt8]
+    public let ivWord: UInt32
     public let level: UInt8?
     public let currentHP: UInt16?
     public let maxHP: UInt16?
@@ -75,6 +92,35 @@ public struct Gen3Mon: Identifiable, Sendable {
     public var nature: UInt8 { UInt8(pid % 25) }
     public var abilityBit: UInt8 { UInt8(pid & 1) }
     public var displayName: String { nickname.isEmpty ? "#\(species)" : nickname }
+
+    /// Six 5-bit IVs packed into one word: HP, Attack, Defense, Speed, Sp. Atk,
+    /// Sp. Def, then the egg flag and the ability bit.
+    public var ivs: [UInt8] {
+        (0..<6).map { UInt8((ivWord >> (5 * $0)) & 0x1F) }
+    }
+    public var isEgg: Bool { (ivWord >> 30) & 1 == 1 }
+    /// Gen 3 keeps an ability bit here as well as deriving one from the PID.
+    public var ivAbilityBit: UInt8 { UInt8((ivWord >> 31) & 1) }
+
+    public static func packIVs(_ ivs: [UInt8], isEgg: Bool, abilityBit: UInt8) -> UInt32 {
+        var word: UInt32 = 0
+        for (index, value) in ivs.prefix(6).enumerated() {
+            word |= UInt32(min(value, 31)) << (5 * index)
+        }
+        if isEgg { word |= 1 << 30 }
+        if abilityBit != 0 { word |= 1 << 31 }
+        return word
+    }
+
+    public static let natureNames = [
+        "Hardy", "Lonely", "Brave", "Adamant", "Naughty",
+        "Bold", "Docile", "Relaxed", "Impish", "Lax",
+        "Timid", "Hasty", "Serious", "Jolly", "Naive",
+        "Modest", "Mild", "Quiet", "Bashful", "Rash",
+        "Calm", "Gentle", "Sassy", "Careful", "Quirky",
+    ]
+    public static let statNames = ["HP", "Atk", "Def", "Spe", "SpA", "SpD"]
+    public var natureName: String { Self.natureNames[Int(nature)] }
 
     static let substructOrder: [String] = [
         "GAEM", "GAME", "GEAM", "GEMA", "GMAE", "GMEA",
@@ -128,7 +174,23 @@ public struct Gen3Mon: Identifiable, Sendable {
         self.friendship = payload.count > 9 ? payload[9] : 0
         // Compact payloads reorder everything after friendship; only read moves
         // from the layout we actually understand.
-        self.moves = storage.payloadSize == 48 ? (0..<4).map { u16(12 + $0 * 2) } : []
+        if let movesOffset = storage.movesOffset {
+            self.moves = (0..<4).map { u16(movesOffset + $0 * 2) }
+        } else {
+            self.moves = []
+        }
+        if let ppOffset = storage.ppOffset {
+            self.pp = (0..<4).map { payload[ppOffset + $0] }
+        } else {
+            self.pp = []
+        }
+        if let evsOffset = storage.evsOffset {
+            self.evs = (0..<6).map { payload[evsOffset + $0] }
+        } else {
+            self.evs = []
+        }
+        self.ivWord = storage.ivWordOffset + 4 <= payload.count
+            ? Gen3Checksum.load32(payload, storage.ivWordOffset) : 0
         if storage.hasStatusBlock {
             self.level = bytes[offset + 0x54]
             self.currentHP = UInt16(bytes[offset + 0x56]) | UInt16(bytes[offset + 0x57]) << 8

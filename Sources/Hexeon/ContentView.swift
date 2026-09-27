@@ -9,7 +9,16 @@ struct ContentView: View {
             if let save = model.save {
                 header(save)
                 Divider()
-                monList
+                HStack(spacing: 0) {
+                    monList
+                    if let mon = model.selectedMon, model.draft != nil {
+                        Divider()
+                        InspectorView(draft: Binding($model.draft)!, mon: mon,
+                                      hasChanges: model.draftHasChanges,
+                                      onApply: model.applyDraft,
+                                      onRevert: model.revertDraft)
+                    }
+                }
             } else {
                 emptyState
             }
@@ -68,16 +77,20 @@ struct ContentView: View {
     }
 
     private var monList: some View {
-        List {
+        List(selection: Binding(get: { model.selection },
+                                set: { offset in
+                                    model.select(model.allMons.first { $0.offset == offset })
+                                })) {
             Section("Party (\(model.party.count))") {
-                ForEach(model.party) { row($0) }
+                ForEach(model.party) { row($0).tag($0.offset) }
             }
             if !model.boxed.isEmpty {
                 Section("PC (\(model.boxed.count))") {
-                    ForEach(model.boxed) { row($0) }
+                    ForEach(model.boxed) { row($0).tag($0.offset) }
                 }
             }
         }
+        .frame(minWidth: 380)
     }
 
     private func row(_ mon: Gen3Mon) -> some View {
@@ -95,7 +108,7 @@ struct ContentView: View {
                         Image(systemName: "sparkles").foregroundStyle(.yellow)
                     }
                 }
-                Text(detail(mon)).font(.caption).foregroundStyle(.secondary)
+                    Text(detail(mon)).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
             Text("sv \(mon.shinyValue)")
@@ -111,8 +124,8 @@ struct ContentView: View {
     private func detail(_ mon: Gen3Mon) -> String {
         var parts = ["species \(mon.species)"]
         if let level = mon.level { parts.append("Lv \(level)") }
-        if let hp = mon.currentHP, let max = mon.maxHP { parts.append("\(hp)/\(max) HP") }
-        parts.append("nature \(mon.nature)")
+        parts.append(mon.natureName)
+        parts.append("IV \(mon.ivs.map(String.init).joined(separator: "/"))")
         if !mon.otName.isEmpty { parts.append("OT \(mon.otName)") }
         return parts.joined(separator: " · ")
     }

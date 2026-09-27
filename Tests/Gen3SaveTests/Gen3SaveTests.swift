@@ -319,3 +319,116 @@ func shinyWorksOnPCPokemonToo(storage: MonStorage, encoding: MonEncoding) throws
     #expect(save.boxStorage == nil)
     #expect(save.party.count == 1)
 }
+
+// MARK: - Full field editing
+
+@Test(arguments: [(MonStorage.boxCompact, MonEncoding.plain),
+                  (MonStorage.boxVanilla, MonEncoding.vanilla)])
+func everyDirectFieldRoundTrips(storage: MonStorage, encoding: MonEncoding) throws {
+    var save = try saveWithBox(storage: storage, encoding: encoding)
+    let mon = save.party[0]                      // party is always the 48-byte layout
+    var draft = MonDraft(mon)
+    draft.nickname = "Sparky"
+    draft.otName = "Ash"
+    draft.species = 412
+    draft.heldItem = 13
+    draft.experience = 125_000
+    draft.friendship = 200
+    draft.ivs = [31, 30, 29, 28, 27, 26]
+    draft.evs = [252, 128, 4, 6, 8, 10]
+    draft.moves = [33, 85, 91, 247]
+    draft.pp = [35, 15, 20, 15]
+    draft.level = 42
+
+    let after = try save.apply(draft, to: mon)
+
+    #expect(after.nickname == "Sparky")
+    #expect(after.otName == "Ash")
+    #expect(after.species == 412)
+    #expect(after.heldItem == 13)
+    #expect(after.experience == 125_000)
+    #expect(after.friendship == 200)
+    #expect(after.ivs == [31, 30, 29, 28, 27, 26])
+    #expect(after.evs == [252, 128, 4, 6, 8, 10])
+    #expect(after.moves == [33, 85, 91, 247])
+    #expect(after.pp == [35, 15, 20, 15])
+    #expect(after.level == 42)
+    #expect(save.validatesChecksums(slot: save.activeSlot))
+    // Re-reading from a fresh parse of the bytes must agree — proves it is really
+    // on disk in the right encoding, not just in the returned struct.
+    let reloaded = try Gen3SaveFile(bytes: save.bytes)
+    #expect(reloaded.party[0].nickname == "Sparky")
+    #expect(reloaded.party[0].ivs == [31, 30, 29, 28, 27, 26])
+    #expect(reloaded.party[0].moves == [33, 85, 91, 247])
+}
+
+@Test func editingNatureFindsAPIDThatKeepsShininessAndAbility() throws {
+    var save = try unboundLikeSave()
+    let mon = save.party[0]
+    for nature in UInt8(0)..<25 {
+        for ability in UInt8(0)...1 {
+            for shiny in [false, true] {
+                var draft = MonDraft(mon)
+                draft.nature = nature
+                draft.abilityBit = ability
+                draft.isShiny = shiny
+                let after = try save.apply(draft, to: mon)
+                #expect(after.nature == nature)
+                #expect(after.abilityBit == ability)
+                #expect(after.isShiny == shiny)
+                #expect(after.species == mon.species)   // untouched by the PID change
+                #expect(save.validatesChecksums(slot: save.activeSlot))
+            }
+        }
+    }
+}
+
+@Test func changingTrainerIDKeepsTheRequestedShininess() throws {
+    var save = try unboundLikeSave()
+    let mon = save.party[0]
+    var draft = MonDraft(mon)
+    draft.trainerID = 12345
+    draft.secretID = 54321
+    draft.isShiny = true
+
+    let after = try save.apply(draft, to: mon)
+    #expect(after.trainerID == 12345)
+    #expect(after.secretID == 54321)
+    #expect(after.isShiny)          // shiny relative to the NEW trainer, not the old
+    #expect(after.shinyValue < 8)
+    #expect(save.validatesChecksums(slot: save.activeSlot))
+}
+
+@Test func compactPCEntriesEditWhatTheyCanAndLeaveTheRestAlone() throws {
+    var save = try saveWithBox(storage: .boxCompact, encoding: .plain)
+    let mon = save.boxes[0]
+    #expect(mon.storage.movesOffset == nil)
+
+    let untouchedBefore = Array(save.bytes[(mon.offset + 0x1C + 10)..<(mon.offset + 0x1C + 22)])
+    var draft = MonDraft(mon)
+    #expect(draft.editableMoves == false)
+    #expect(draft.editableEVs == false)
+    draft.species = 500
+    draft.ivs = [1, 2, 3, 4, 5, 6]
+    draft.nickname = "Renamed"
+
+    let after = try save.apply(draft, to: mon)
+    #expect(after.species == 500)
+    #expect(after.ivs == [1, 2, 3, 4, 5, 6])
+    #expect(after.nickname == "Renamed")
+    // The 12 bytes we cannot decode must come through byte-identical.
+    let untouchedAfter = Array(save.bytes[(mon.offset + 0x1C + 10)..<(mon.offset + 0x1C + 22)])
+    #expect(untouchedAfter == untouchedBefore)
+    #expect(save.validatesChecksums(slot: save.activeSlot))
+}
+
+@Test func ivsClampInsteadOfOverflowingIntoNeighbouringFields() throws {
+    var save = try unboundLikeSave()
+    let mon = save.party[0]
+    var draft = MonDraft(mon)
+    draft.ivs = [99, 99, 99, 99, 99, 99]
+    let after = try save.apply(draft, to: mon)
+    #expect(after.ivs == [31, 31, 31, 31, 31, 31])
+    #expect(after.isEgg == mon.isEgg)
+    #expect(save.validatesChecksums(slot: save.activeSlot))
+}

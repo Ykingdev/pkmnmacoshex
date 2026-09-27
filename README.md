@@ -49,10 +49,12 @@ print(save.lengthWindows[1]!) // measured candidate lengths for section 1
 
 - Opens any 128 KB Gen 3 save; picks the slot the game would actually load
 - Autodetects payload encoding *and* PC entry geometry — vanilla or romhack
-- Lists **party and PC** with artwork, nickname, species id, level, HP, nature
-  and shiny value
-- **Toggles shininess** on any of them while preserving nature, ability and
-  everything else
+- Lists **party and PC** with artwork, nickname, species id, level, nature and IVs
+- **Edits every field it can decode**: nickname, OT name, trainer and secret ID,
+  species, held item, experience, friendship, level, IVs, EVs, moves and PP
+- **Nature, ability and shininess** — all three are encoded in the PID, so
+  Hexeon searches for a PID satisfying the combination you asked for and
+  re-encrypts the payload under the new key
 - Shows shiny artwork for shinies, with a "preview all as shiny" switch
 - Exports a new file — never overwrites your input
 - Refuses to write anything whose checksums it can't compute unambiguously
@@ -88,22 +90,29 @@ Hexeon scans each section for entries that validate as stored Pokémon and locks
 onto the stride it finds. The cost: an entry whose header straddles a section
 boundary is skipped, and the app tells you how many.
 
+## What editing can and can't reach
+
+Party Pokémon use the vanilla 48-byte payload in every game tested, so every
+field is editable there. Unbound's 58-byte PC entry packs moves, PP and EVs into
+12 bytes whose layout this project hasn't decoded — those controls are disabled
+for PC Pokémon on such saves, and **the undecoded bytes are copied through
+byte-for-byte** on every write. A test asserts exactly that.
+
+Level is editable but worth understanding: Gen 3 also derives level from
+experience via per-species growth-rate tables a romhack can change, so set level
+and experience consistently or the game may correct one of them.
+
 ## Not implemented
 
-Item/bag editing, IV/EV editing, moves, box numbers and names, legality checks,
-and generations other than 3. Gen 3 romhacks were the itch; the rest can wait
-until someone actually wants it.
-
-Moves are only read from 48-byte payloads. Unbound's 58-byte PC entry packs the
-last 20 bytes in a way this project hasn't decoded, so PC moves aren't shown —
-species, PID, nickname and IVs all sit in the part that is understood, which is
-everything shiny editing touches.
+Item/bag editing, box numbers and names, legality checks, species and move
+*names* (those tables live in the ROM, not the save), and generations other than
+3. Gen 3 romhacks were the itch; the rest can wait until someone wants it.
 
 ## Build
 
 ```bash
 swift build             # library + app
-swift test              # 10 tests, no save file required
+swift test              # 15 tests, no save file required
 ./Scripts/bundle-app.sh # produces build/Hexeon.app
 ```
 

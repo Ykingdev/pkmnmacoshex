@@ -48,7 +48,7 @@ public struct Gen3SaveFile {
         public var isComplete: Bool { offsets.count == Gen3SaveFile.sectionsPerSlot }
     }
 
-    public private(set) var bytes: [UInt8]
+    public internal(set) var bytes: [UInt8]
     public let slots: [Slot]
     /// The slot the game will load: the complete one with the highest counter.
     public let activeSlot: Int
