@@ -7,6 +7,26 @@ including **romhack saves that PKHeX can't open**.
 
 ![Swift 6](https://img.shields.io/badge/Swift-6.0-orange) ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-blue) ![MIT](https://img.shields.io/badge/license-MIT-green)
 
+![Party and PC](docs/screenshot-party.png)
+
+Party and PC together, with artwork, species and move names, natures and IVs read
+straight from a Pokémon Unbound save. The badges at the top are what was detected
+from the file itself: a romhack magic number, plaintext payloads, 58-byte PC
+entries.
+
+![Editing a Pokémon](docs/screenshot-inspector.png)
+
+Every decodable field is editable. Nature, ability and shininess aren't stored —
+Gen 3 derives them from the PID — so setting them searches for a PID satisfying
+all three and re-encrypts the payload under the new key.
+
+![Move browser](docs/screenshot-moves.png)
+
+The move browser, filtered to the 181 of 922 moves that change stats. That filter
+reads each move's description from the ROM, because the effect byte can't answer
+it: Growl and Toxic share effect 22. "not in learnset" is a warning, never a
+claim of illegality — see below.
+
 ## Install
 
 **Download** — get `pkmnmacoshex.zip` from

@@ -69,6 +69,7 @@ struct MovePicker: View {
                         Text(tables.typeName(id)).tag(UInt8?.some(id))
                     }
                 }
+                .labelsHidden()
                 .frame(width: 130)
                 Picker("Category", selection: $category) {
                     Text("Any category").tag(UInt8?.none)
@@ -76,12 +77,14 @@ struct MovePicker: View {
                     Text("Special").tag(UInt8?.some(1))
                     Text("Status").tag(UInt8?.some(2))
                 }
+                .labelsHidden()
                 .frame(width: 140)
+                // Not .labelsHidden() — these two need their text, and hiding
+                // labels on the whole row silently blanked them.
                 Toggle("Changes stats", isOn: $statChangersOnly)
                 Toggle("\(speciesName) can learn", isOn: $learnableOnly)
                 Spacer()
             }
-            .labelsHidden()
             .font(.caption)
         }
         .padding(10)

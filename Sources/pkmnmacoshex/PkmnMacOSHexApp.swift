@@ -11,6 +11,9 @@ struct PkmnMacOSHexApp: App {
             ContentView(model: model)
                 .frame(minWidth: 720, minHeight: 520)
         }
+        // Wide enough for the list and the inspector side by side, tall enough
+        // that the inspector doesn't open already scrolled.
+        .defaultSize(width: 1180, height: 820)
         .commands {
             CommandGroup(replacing: .newItem) {}
             CommandGroup(after: .newItem) {
