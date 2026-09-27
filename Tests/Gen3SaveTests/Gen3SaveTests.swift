@@ -432,3 +432,124 @@ func everyDirectFieldRoundTrips(storage: MonStorage, encoding: MonEncoding) thro
     #expect(after.isEgg == mon.isEgg)
     #expect(save.validatesChecksums(slot: save.activeSlot))
 }
+
+// MARK: - Mining names out of a ROM
+
+/// Builds a fake ROM with name tables at an arbitrary offset and width, so table
+/// discovery is tested without shipping (or needing) a real ROM.
+private func fakeROM(speciesWidth: Int, moveWidth: Int, uppercase: Bool,
+                     speciesAt: Int = 0x2A_1000, movesAt: Int = 0x31_7000,
+                     size: Int = 0x40_0000) -> [UInt8] {
+    var rom = [UInt8](repeating: 0, count: size)
+    // Deterministic filler that can't be mistaken for Gen 3 text runs.
+    var state: UInt32 = 0x1234_5678
+    for i in 0..<size {
+        state = state &* 1_664_525 &+ 1_013_904_223
+        rom[i] = UInt8(0xF0 | (state >> 24) & 0x0F)
+    }
+    func plant(_ names: [String], at start: Int, width: Int) {
+        for (index, name) in names.enumerated() {
+            let text = uppercase ? name.uppercased() : name
+            let encoded = Gen3Text.encode(text, length: width)
+            rom.replaceSubrange((start + index * width)..<(start + index * width + width),
+                                with: encoded)
+        }
+    }
+    plant(["??????????", "Bulbasaur", "Ivysaur", "Venusaur", "Charmander",
+           "Charmeleon", "Charizard", "Squirtle", "Beldum", "Flabébé"],
+          at: speciesAt, width: speciesWidth)
+    plant(["-", "Pound", "Karate Chop", "Double Slap", "Comet Punch",
+           "Mega Punch", "Pay Day", "Fire Punch", "Double-Edge"],
+          at: movesAt, width: moveWidth)
+    return rom
+}
+
+@Test(arguments: [(11, 13, false), (11, 13, true), (13, 17, false), (12, 14, true)])
+func minesNameTablesAtAnyWidthOrCase(speciesWidth: Int, moveWidth: Int, uppercase: Bool) throws {
+    let rom = fakeROM(speciesWidth: speciesWidth, moveWidth: moveWidth, uppercase: uppercase)
+    let tables = RomTables.mine(rom: rom, romName: "test.gba")
+
+    // Index 1 is Bulbasaur in every Gen 3 game, so ids must line up exactly.
+    #expect(RomTables.normalize(tables.speciesName(1) ?? "") == "bulbasaur")
+    #expect(RomTables.normalize(tables.speciesName(4) ?? "") == "charmander")
+    #expect(RomTables.normalize(tables.speciesName(8) ?? "") == "beldum")
+    #expect(RomTables.normalize(tables.moveName(1) ?? "") == "pound")
+    #expect(RomTables.normalize(tables.moveName(2) ?? "") == "karatechop")
+    #expect(RomTables.normalize(tables.moveName(8) ?? "") == "doubleedge")
+    #expect(tables.romName == "test.gba")
+}
+
+@Test func minedNamesSurviveAccentsAndPunctuation() throws {
+    let rom = fakeROM(speciesWidth: 11, moveWidth: 13, uppercase: false)
+    let tables = RomTables.mine(rom: rom)
+    #expect(tables.speciesName(9) == "Flabébé")
+    #expect(tables.moveName(8) == "Double-Edge")
+}
+
+@Test func miningAFileThatIsNotAROMYieldsNothingRatherThanNonsense() throws {
+    var rom = [UInt8](repeating: 0, count: 0x10_000)
+    for i in 0..<rom.count { rom[i] = UInt8(i % 251) }
+    let tables = RomTables.mine(rom: rom)
+    #expect(tables.isEmpty)
+}
+
+@Test func tablesEncodeAndDecodeForCaching() throws {
+    let tables = RomTables.mine(rom: fakeROM(speciesWidth: 11, moveWidth: 13, uppercase: false),
+                                romName: "unbound.gba")
+    let restored = try JSONDecoder().decode(RomTables.self,
+                                            from: try JSONEncoder().encode(tables))
+    #expect(restored == tables)
+    #expect(restored.speciesName(1) == "Bulbasaur")
+}
+
+/// Opt-in: mine a real ROM and optionally dump the tables as JSON, which is how
+/// the bundled name data in this repo was produced.
+///
+///   HEXEON_ROM=/path/to/rom.gba HEXEON_ROM_OUT=Sources/Hexeon/Names/game.json \
+///   HEXEON_ROM_MAGIC=01121999 swift test --filter minesRealROM
+@Test(.enabled(if: ProcessInfo.processInfo.environment["HEXEON_ROM"] != nil))
+func minesRealROM() throws {
+    let env = ProcessInfo.processInfo.environment
+    let url = URL(fileURLWithPath: env["HEXEON_ROM"]!)
+    var tables = try RomTables.mine(romAt: url)
+    if let magic = env["HEXEON_ROM_MAGIC"], let value = UInt32(magic, radix: 16) {
+        tables.saveMagic = value
+    }
+    print("\(tables.romName): \(tables.species.count) species, \(tables.moves.count) moves")
+    for id in [UInt16(1), 79, 398, 777, 840, 959] {
+        print("  species \(id) = \(tables.speciesName(id) ?? "—")")
+    }
+    for id in [UInt16(1), 33, 499] {
+        print("  move \(id) = \(tables.moveName(id) ?? "—")")
+    }
+    #expect(!tables.isEmpty)
+    if let out = env["HEXEON_ROM_OUT"] {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        try encoder.encode(tables).write(to: URL(fileURLWithPath: out))
+    }
+}
+
+/// The committed name data must stay loadable and correct — it ships to users, so
+/// a bad regeneration should fail CI rather than quietly break names in the app.
+@Test func bundledUnboundNamesAreValid() throws {
+    let repo = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    let file = repo.appendingPathComponent("Sources/Hexeon/Names/unbound-v2.1.1.1.json")
+    let tables = try JSONDecoder().decode(RomTables.self, from: try Data(contentsOf: file))
+
+    #expect(tables.saveMagic == 0x0112_1999)          // Unbound's footer magic
+    #expect(tables.species.count > 1200)
+    #expect(tables.moves.count > 900)
+    // Spot-check ids taken from a real Unbound save's party and PC.
+    #expect(tables.speciesName(398) == "Beldum")
+    #expect(tables.speciesName(820) == "Bergmite")
+    #expect(tables.speciesName(959) == "Cutiefly")
+    #expect(tables.speciesName(840) == "Flabébé")
+    #expect(tables.speciesName(989) == "Type: Null")
+    #expect(tables.moveName(33) == "Tackle")
+    #expect(tables.moveName(499) == "Metal Bash")
+    // Tables must stop where the game's data stops, not run into dialogue.
+    #expect(tables.moveName(923) == nil)
+    #expect(tables.species.values.allSatisfy { $0.first?.isUppercase == true })
+}

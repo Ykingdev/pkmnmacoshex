@@ -13,6 +13,13 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/Hexeon"
 
+# SwiftPM puts resources in a side-car bundle; Bundle.module needs it alongside
+# the executable, so carry it into the app.
+BUILD_DIR="$(swift build -c "$CONFIG" --show-bin-path)"
+for RESOURCE in "$BUILD_DIR"/*.bundle; do
+  [ -e "$RESOURCE" ] && cp -R "$RESOURCE" "$APP/Contents/Resources/"
+done
+
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -32,5 +39,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
-codesign --force --sign - "$APP" 2>/dev/null || echo "note: ad-hoc signing skipped"
+# Copied resources carry xattrs (quarantine, provenance) that codesign rejects.
+xattr -cr "$APP" 2>/dev/null || true
+codesign --force --deep --sign - "$APP" 2>/dev/null || echo "note: ad-hoc signing skipped"
 echo "built $APP"

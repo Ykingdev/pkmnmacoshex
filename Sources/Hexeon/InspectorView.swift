@@ -6,6 +6,7 @@ import Gen3Save
 struct InspectorView: View {
     @Binding var draft: MonDraft
     let mon: Gen3Mon
+    let tables: RomTables
     let hasChanges: Bool
     let onApply: () -> Void
     let onRevert: () -> Void
@@ -33,6 +34,11 @@ struct InspectorView: View {
 
                     group("Species") {
                         field("Species id") { number($draft.species) }
+                        if let name = tables.speciesName(draft.species) {
+                            caption(name)
+                        } else if !tables.isEmpty {
+                            caption("No name for id \(draft.species) in \(tables.romName).")
+                        }
                         field("Held item") { number($draft.heldItem) }
                         field("Experience") { number($draft.experience) }
                         field("Friendship") { number($draft.friendship) }
@@ -107,22 +113,28 @@ struct InspectorView: View {
                     group("Moves") {
                         if draft.editableMoves {
                             ForEach(0..<4, id: \.self) { index in
-                                field("Move \(index + 1)") {
-                                    HStack(spacing: 6) {
-                                        number(Binding(
-                                            get: { draft.moves[index] },
-                                            set: { draft.moves[index] = $0 }
-                                        ))
-                                        Text("PP").font(.caption2).foregroundStyle(.secondary)
-                                        number(Binding(
-                                            get: { draft.pp[index] },
-                                            set: { draft.pp[index] = $0 }
-                                        ), width: 40)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    field("Move \(index + 1)") {
+                                        HStack(spacing: 6) {
+                                            number(Binding(
+                                                get: { draft.moves[index] },
+                                                set: { draft.moves[index] = $0 }
+                                            ), width: 84)
+                                            Text("PP").font(.caption2).foregroundStyle(.secondary)
+                                            number(Binding(
+                                                get: { draft.pp[index] },
+                                                set: { draft.pp[index] = $0 }
+                                            ), width: 40)
+                                        }
+                                    }
+                                    if let name = tables.moveName(draft.moves[index]) {
+                                        caption(name)
                                     }
                                 }
                             }
-                            Text("Move ids are the game's own numbering; romhacks add moves beyond the vanilla 354.")
-                                .font(.caption2).foregroundStyle(.secondary)
+                            if tables.moves.isEmpty {
+                                caption("Import a ROM to see move names instead of ids.")
+                            }
                         } else {
                             unavailable("PC moves live in the 12 undecoded bytes of this save's \(mon.storage.totalSize)-byte entry. Hexeon preserves them byte-for-byte instead of guessing.")
                         }
@@ -173,6 +185,13 @@ struct InspectorView: View {
         TextField("", value: binding, format: IntegerFormatStyle<V>())
             .multilineTextAlignment(.trailing)
             .frame(width: width)
+    }
+
+    private func caption(_ text: String) -> some View {
+        Text(text)
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .trailing)
     }
 
     private func unavailable(_ reason: String) -> some View {

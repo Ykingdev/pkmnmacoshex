@@ -7,8 +7,12 @@ public enum Gen3Text {
     public static let terminator: UInt8 = 0xFF
 
     private static let table: [UInt8: Character] = {
+        // Enough of the table to read names out of a ROM: "Double-Edge",
+        // "Nature's Madness", "Flabébé" all need entries beyond the alphabet.
         var t: [UInt8: Character] = [0x00: " ", 0x1B: "é", 0xAB: "!", 0xAC: "?",
-                                     0xAD: ".", 0xAE: "-", 0xB8: ",", 0xBA: "/"]
+                                     0xAD: ".", 0xAE: "-", 0xB0: "…", 0xB1: "“",
+                                     0xB2: "”", 0xB3: "‘", 0xB4: "’", 0xB5: "♂",
+                                     0xB6: "♀", 0xB8: ",", 0xBA: "/", 0xF0: ":"]
         for n in 0..<10 { t[0xA1 + UInt8(n)] = Character(String(n)) }
         for n in 0..<26 {
             t[0xBB + UInt8(n)] = Character(UnicodeScalar(65 + n)!)

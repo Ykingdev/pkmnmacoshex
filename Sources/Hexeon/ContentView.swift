@@ -14,6 +14,7 @@ struct ContentView: View {
                     if let mon = model.selectedMon, model.draft != nil {
                         Divider()
                         InspectorView(draft: Binding($model.draft)!, mon: mon,
+                                      tables: model.tables,
                                       hasChanges: model.draftHasChanges,
                                       onApply: model.applyDraft,
                                       onRevert: model.revertDraft)
@@ -26,7 +27,7 @@ struct ContentView: View {
             footer
         }
         .fileImporter(isPresented: $model.isImporting, allowedContentTypes: [.data]) { result in
-            if case .success(let url) = result { model.load(url) }
+            if case .success(let url) = result { model.handleImport(url) }
         }
         .fileExporter(isPresented: $model.isExporting,
                       document: RawSaveDocument(data: model.save?.data ?? Data()),
@@ -46,7 +47,7 @@ struct ContentView: View {
                 .font(.callout)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
-            Button("Open Save…") { model.isImporting = true }
+            Button("Open Save…") { model.beginImport(.save) }
                 .controlSize(.large)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -69,9 +70,23 @@ struct ContentView: View {
                 }
             }
             Spacer()
-            Toggle("Preview all as shiny", isOn: $model.previewShiny)
-                .toggleStyle(.switch)
+            VStack(alignment: .trailing, spacing: 6) {
+                Toggle("Preview all as shiny", isOn: $model.previewShiny)
+                    .toggleStyle(.switch)
+                    .font(.caption)
+                Button {
+                    model.beginImport(.rom)
+                } label: {
+                    if model.tables.isEmpty {
+                        Label("Import ROM for names", systemImage: "doc.badge.plus")
+                    } else {
+                        Label("\(model.importedTables == nil ? "bundled" : "mined") · \(model.tables.species.count) species, \(model.tables.moves.count) moves",
+                              systemImage: "checkmark.seal.fill")
+                    }
+                }
                 .font(.caption)
+                .buttonStyle(.link)
+            }
         }
         .padding(12)
     }
@@ -104,6 +119,9 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 5) {
                     Text(mon.displayName).fontWeight(.medium)
+                    if let name = model.speciesName(mon), name != mon.nickname {
+                        Text(name).foregroundStyle(.secondary)
+                    }
                     if mon.isShiny {
                         Image(systemName: "sparkles").foregroundStyle(.yellow)
                     }
@@ -122,10 +140,12 @@ struct ContentView: View {
     }
 
     private func detail(_ mon: Gen3Mon) -> String {
-        var parts = ["species \(mon.species)"]
+        var parts = [model.speciesName(mon) == nil ? "species \(mon.species)" : "#\(mon.species)"]
         if let level = mon.level { parts.append("Lv \(level)") }
         parts.append(mon.natureName)
         parts.append("IV \(mon.ivs.map(String.init).joined(separator: "/"))")
+        let named = mon.moves.compactMap { model.moveName($0) }.filter { $0 != "—" }
+        if !named.isEmpty { parts.append(named.joined(separator: ", ")) }
         if !mon.otName.isEmpty { parts.append("OT \(mon.otName)") }
         return parts.joined(separator: " · ")
     }
@@ -141,7 +161,7 @@ struct ContentView: View {
                 .lineLimit(2)
                 .textSelection(.enabled)
             Spacer()
-            Button("Open…") { model.isImporting = true }
+            Button("Open…") { model.beginImport(.save) }
             Button("Export…") { model.isExporting = true }
                 .disabled(!model.isDirty)
                 .buttonStyle(.borderedProminent)

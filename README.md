@@ -49,7 +49,8 @@ print(save.lengthWindows[1]!) // measured candidate lengths for section 1
 
 - Opens any 128 KB Gen 3 save; picks the slot the game would actually load
 - Autodetects payload encoding *and* PC entry geometry — vanilla or romhack
-- Lists **party and PC** with artwork, nickname, species id, level, nature and IVs
+- Lists **party and PC** with artwork, nickname, species and move **names**,
+  level, nature and IVs
 - **Edits every field it can decode**: nickname, OT name, trainer and secret ID,
   species, held item, experience, friendship, level, IVs, EVs, moves and PP
 - **Nature, ability and shininess** — all three are encoded in the PID, so
@@ -64,10 +65,45 @@ keeps `pid % 25` (nature) and `pid % 24` (substructure order), and since 600 is
 even, the ability bit too. For encrypted saves the payload is re-encrypted under
 the new key and the payload checksum rewritten.
 
+## Names: mined from the ROM
+
+A save stores only numbers, in the ROM's own numbering — Beldum is 398 in
+Unbound, 374 in the National Dex — so names have to come from the ROM. **Import
+ROM for Names…** (⌘R) mines them once and remembers them, so names keep working
+afterwards without the ROM present.
+
+Table addresses are never hardcoded, because that is exactly what breaks on every
+hack. Instead Hexeon finds each table by what it must contain: the encoded bytes
+of "Bulbasaur" (or "Pound"), then the entry width measured from where "Ivysaur"
+lands, then confirmation from the next anchors. Widths and capitalisation differ
+per game and are both derived.
+
+Knowing where a table *ends* turned out to be the subtle part, and two things
+must not be mistaken for it:
+
+- **Placeholders.** Vanilla FireRed has 25 consecutive "?????" rows at species
+  252–276 before the Gen 3 species resume at 277.
+- **Adjacent text.** Straight after the move table sits ordinary game dialogue,
+  which decodes perfectly well and is terminated too. What separates a row from
+  running text is *padding*: an entry fills everything after its terminator with
+  `0xFF`. On Unbound this ends the move table at exactly 922 ("Rapid Flow"),
+  where a naive scan ran 40 rows into item descriptions.
+
+Unbound v2.1.1.1 ships pre-mined (`Sources/Hexeon/Names/`, 42 KB): 1270 species
+and 922 move names, matched to a save by its footer magic, so it works with no
+ROM at all. **Only names are bundled, never a ROM.** Regenerate with:
+
+```bash
+HEXEON_ROM=/path/to/rom.gba \
+HEXEON_ROM_OUT=Sources/Hexeon/Names/game.json \
+HEXEON_ROM_MAGIC=01121999 \
+swift test --filter minesRealROM
+```
+
 ## Artwork, without a species table
 
-A romhack numbers species however it likes: Beldum is 398 in Unbound, 374 in the
-National Dex. Hexeon resolves the difference in three steps, cheapest first:
+With no ROM imported, species numbers are resolved to National Dex numbers for
+artwork in three steps, cheapest first:
 
 1. a mapping learned earlier and cached on disk;
 2. ids ≤ 251, which equal National Dex numbers in every Gen 3 game and in
@@ -75,6 +111,9 @@ National Dex. Hexeon resolves the difference in three steps, cheapest first:
 3. **the nickname** — an un-renamed Pokémon is named after its species, so the
    save carries its own species table. One un-renamed Flabébé teaches Hexeon what
    species 840 is, for every renamed one afterwards.
+
+A mined ROM supersedes all three, since it names every species including renamed
+ones.
 
 Artwork is the Pokémon HOME renders from [PokeAPI/sprites](https://github.com/PokeAPI/sprites),
 fetched on demand and cached under `~/Library/Caches/Hexeon`. Nothing is bundled:
@@ -112,7 +151,7 @@ Item/bag editing, box numbers and names, legality checks, species and move
 
 ```bash
 swift build             # library + app
-swift test              # 15 tests, no save file required
+swift test              # 21 tests, no save file or ROM required
 ./Scripts/bundle-app.sh # produces build/Hexeon.app
 ```
 
