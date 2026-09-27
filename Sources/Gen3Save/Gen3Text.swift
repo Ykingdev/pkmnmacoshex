@@ -27,6 +27,9 @@ public enum Gen3Text {
         return r
     }()
 
+    /// The character for one byte, or nil when the byte isn't text.
+    public static func character(for byte: UInt8) -> Character? { table[byte] }
+
     public static func decode(_ raw: some Sequence<UInt8>) -> String {
         var out = ""
         for byte in raw {

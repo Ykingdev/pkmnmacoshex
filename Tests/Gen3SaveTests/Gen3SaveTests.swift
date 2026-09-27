@@ -553,3 +553,105 @@ func minesRealROM() throws {
     #expect(tables.moveName(923) == nil)
     #expect(tables.species.values.allSatisfy { $0.first?.isUppercase == true })
 }
+
+@Test(.enabled(if: ProcessInfo.processInfo.environment["HEXEON_ROM"] != nil))
+func minesBattleDataAndLearnsets() throws {
+    let tables = try RomTables.mine(romAt: URL(fileURLWithPath: ProcessInfo.processInfo.environment["HEXEON_ROM"]!))
+    print("types \(tables.typeNames.count) · stats \(tables.moveStats.count) · descriptions \(tables.moveDescriptions.count) · learnsets \(tables.learnsets.count) · TMs \(tables.tmMoves.count)")
+    for id in [UInt16(1), 33, 52, 86, 347] {
+        if let s = tables.stats(forMove: id) {
+            print("  \(tables.moveName(id) ?? "?"): \(s.power) power, \(tables.typeName(s.type)), \(s.accuracy)%, \(s.pp) PP, \(s.categoryName), changesStats=\(tables.changesStats(move: id))")
+        }
+    }
+    print("  Bulbasaur learnset: \(tables.learnset(species: 1).prefix(5).map { "\(tables.moveName($0.move) ?? "?")@\($0.level)" })")
+    print("  Beldum learnset: \(tables.learnset(species: 398).map { "\(tables.moveName($0.move) ?? "?")@\($0.level)" })")
+    print("  Beldum knows Tackle? \(tables.legality(species: 398, move: 33))")
+    print("  Beldum knows Surf? \(tables.legality(species: 398, move: 57))")
+    #expect(!tables.moveStats.isEmpty)
+    #expect(!tables.learnsets.isEmpty)
+}
+
+// MARK: - Move browsing data
+
+/// Small hand-built tables, so filter and legality behaviour is tested without a ROM.
+private func handMadeTables() -> RomTables {
+    var tables = RomTables(species: [1: "Bulbasaur", 398: "Beldum"],
+                           moves: [33: "Tackle", 14: "Swords Dance", 86: "Thunder Wave",
+                                   57: "Surf", 499: "Metal Bash"],
+                           romName: "hand.gba")
+    tables.typeNames = [0: "Normal", 8: "Steel", 13: "Electric", 11: "Water"]
+    tables.moveStats = [
+        33: MoveStats(power: 40, type: 0, accuracy: 100, pp: 35, effectChance: 0, category: 0),
+        14: MoveStats(power: 0, type: 0, accuracy: 0, pp: 30, effectChance: 0, category: 2),
+        86: MoveStats(power: 0, type: 13, accuracy: 100, pp: 20, effectChance: 0, category: 2),
+        57: MoveStats(power: 95, type: 11, accuracy: 100, pp: 15, effectChance: 0, category: 1),
+    ]
+    tables.moveDescriptions = [
+        33: "A physical attack in which the user charges into the foe.",
+        14: "A frenetic dance. It sharply raises the Attack stat.",
+        86: "A weak jolt of electricity that paralyzes the foe.",
+        57: "The user swamps the battlefield with a giant wave.",
+    ]
+    tables.learnsets = [398: [LearnedMove(move: 33, level: 1), LearnedMove(move: 499, level: 10)]]
+    tables.tmMoves = [57]
+    return tables
+}
+
+@Test func statChangingMovesComeFromDescriptionsNotEffectBytes() {
+    let tables = handMadeTables()
+    // Swords Dance raises a stat; Thunder Wave is a status move that does not.
+    #expect(tables.changesStats(move: 14))
+    #expect(tables.changesStats(move: 86) == false)
+    #expect(tables.changesStats(move: 33) == false)
+    // Both are category 2, so category alone could not have told them apart.
+    #expect(tables.stats(forMove: 14)?.category == tables.stats(forMove: 86)?.category)
+}
+
+@Test func legalityNeverCallsATMMoveIllegal() {
+    let tables = handMadeTables()
+    #expect(tables.legality(species: 398, move: 33) == .learnsAtLevel(1))
+    #expect(tables.legality(species: 398, move: 499) == .learnsAtLevel(10))
+    // Surf is a TM: unverifiable, so it must not be flagged.
+    #expect(tables.legality(species: 398, move: 57) == .tmOrHmMove)
+    #expect(tables.legality(species: 398, move: 57).isFlagged == false)
+    // Swords Dance is neither in the learnset nor a TM — that is worth flagging.
+    #expect(tables.legality(species: 398, move: 14) == .notInLearnset)
+    #expect(tables.legality(species: 398, move: 14).isFlagged)
+    // A species with no learnset data must never be flagged on no evidence.
+    #expect(tables.legality(species: 1, move: 14) == .unknown)
+    #expect(tables.legality(species: 1, move: 14).isFlagged == false)
+    #expect(tables.legality(species: 398, move: 0) == .unknown)
+}
+
+@Test func battleDataSurvivesTheRoundTripToJSON() throws {
+    let restored = try JSONDecoder().decode(RomTables.self,
+                                            from: try JSONEncoder().encode(handMadeTables()))
+    #expect(restored.stats(forMove: 57)?.power == 95)
+    #expect(restored.stats(forMove: 57)?.category == 1)
+    #expect(restored.typeName(11) == "Water")
+    #expect(restored.learnset(species: 398) == [LearnedMove(move: 33, level: 1),
+                                                LearnedMove(move: 499, level: 10)])
+    #expect(restored.tmMoves == [57])
+    #expect(restored.changesStats(move: 14))
+}
+
+@Test func bundledUnboundBattleDataIsValid() throws {
+    let repo = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    let file = repo.appendingPathComponent("Sources/Hexeon/Names/unbound-v2.1.1.1.json")
+    let tables = try JSONDecoder().decode(RomTables.self, from: try Data(contentsOf: file))
+
+    #expect(tables.moveStats.count > 600)
+    #expect(tables.learnsets.count > 1200)
+    #expect(tables.tmMoves.count == 58)
+    #expect(tables.typeName(0) == "Normal")
+    #expect(tables.typeName(10) == "Fire")          // vanilla ids: 9 is unused
+    #expect(tables.stats(forMove: 33)?.power == 40) // Tackle
+    #expect(tables.stats(forMove: 52)?.category == 1) // Ember is special
+    #expect(tables.changesStats(move: 347))         // Calm Mind
+    #expect(tables.changesStats(move: 33) == false) // Tackle
+    // Beldum's level-up learnset must match the moves a real Unbound Beldum has.
+    let beldum = tables.learnset(species: 398).map(\.move)
+    #expect(beldum.contains(33) && beldum.contains(148) && beldum.contains(499))
+    #expect(tables.legality(species: 398, move: 33) == .learnsAtLevel(1))
+}

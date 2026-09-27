@@ -11,6 +11,8 @@ struct InspectorView: View {
     let onApply: () -> Void
     let onRevert: () -> Void
 
+    @State private var pickingSlot: Int?
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
@@ -113,27 +115,17 @@ struct InspectorView: View {
                     group("Moves") {
                         if draft.editableMoves {
                             ForEach(0..<4, id: \.self) { index in
-                                VStack(alignment: .leading, spacing: 1) {
-                                    field("Move \(index + 1)") {
-                                        HStack(spacing: 6) {
-                                            number(Binding(
-                                                get: { draft.moves[index] },
-                                                set: { draft.moves[index] = $0 }
-                                            ), width: 84)
-                                            Text("PP").font(.caption2).foregroundStyle(.secondary)
-                                            number(Binding(
-                                                get: { draft.pp[index] },
-                                                set: { draft.pp[index] = $0 }
-                                            ), width: 40)
-                                        }
-                                    }
-                                    if let name = tables.moveName(draft.moves[index]) {
-                                        caption(name)
-                                    }
-                                }
+                                moveRow(index)
                             }
                             if tables.moves.isEmpty {
-                                caption("Import a ROM to see move names instead of ids.")
+                                caption("Import a ROM to browse moves by name instead of id.")
+                            } else if flaggedSlots.isEmpty == false {
+                                HStack(alignment: .top, spacing: 5) {
+                                    Image(systemName: "flag.fill").foregroundStyle(.orange)
+                                    Text("\(flaggedSlots.count == 1 ? "One move is" : "\(flaggedSlots.count) moves are") not in \(speciesLabel)'s level-up learnset. TM, HM, egg and tutor moves can't be verified, so this is a warning, not proof.")
+                                }
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
                             }
                         } else {
                             unavailable("PC moves live in the 12 undecoded bytes of this save's \(mon.storage.totalSize)-byte entry. Hexeon preserves them byte-for-byte instead of guessing.")
@@ -157,6 +149,60 @@ struct InspectorView: View {
             .padding(10)
         }
         .frame(width: 320)
+    }
+
+    private var speciesLabel: String {
+        tables.speciesName(draft.species) ?? "#\(draft.species)"
+    }
+
+    /// Slots holding a move the species has no level-up claim to.
+    private var flaggedSlots: [Int] {
+        (0..<4).filter { index in
+            let move = draft.moves[index]
+            return move != 0 && tables.legality(species: draft.species, move: move).isFlagged
+        }
+    }
+
+    private func moveRow(_ index: Int) -> some View {
+        let move = draft.moves[index]
+        let stats = tables.stats(forMove: move)
+        return VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Button {
+                    pickingSlot = index
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(move == 0 ? "—" : (tables.moveName(move) ?? "#\(move)"))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Image(systemName: "chevron.up.chevron.down").font(.caption2)
+                    }
+                    .frame(width: 150)
+                }
+                .disabled(tables.moves.isEmpty)
+                Text("PP").font(.caption2).foregroundStyle(.secondary)
+                number(Binding(
+                    get: { draft.pp[index] },
+                    set: { draft.pp[index] = $0 }
+                ), width: 42)
+            }
+            if move != 0 {
+                HStack(spacing: 5) {
+                    if let stats {
+                        Text("\(tables.typeName(stats.type)) · \(stats.categoryName)\(stats.power > 0 ? " · \(stats.power) pow" : "")")
+                            .font(.caption2).foregroundStyle(.secondary)
+                    }
+                    LegalityBadge(legality: tables.legality(species: draft.species, move: move))
+                    Spacer()
+                }
+            }
+        }
+        .sheet(isPresented: Binding(get: { pickingSlot == index },
+                                    set: { if !$0 { pickingSlot = nil } })) {
+            MovePicker(tables: tables, species: draft.species, speciesName: speciesLabel) { id, pp in
+                draft.moves[index] = id
+                if pp > 0 { draft.pp[index] = pp }
+            }
+        }
     }
 
     // MARK: - Small builders

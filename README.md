@@ -56,6 +56,10 @@ print(save.lengthWindows[1]!) // measured candidate lengths for section 1
 - **Nature, ability and shininess** — all three are encoded in the PID, so
   Hexeon searches for a PID satisfying the combination you asked for and
   re-encrypts the payload under the new key
+- A **move browser**: search by name, filter by type, category or "changes
+  stats", or narrow to what this species can actually learn — with each move's
+  power, accuracy, PP and description from the ROM
+- **Legality warnings** when a move isn't in the species' level-up learnset
 - Shows shiny artwork for shinies, with a "preview all as shiny" switch
 - Exports a new file — never overwrites your input
 - Refuses to write anything whose checksums it can't compute unambiguously
@@ -89,9 +93,10 @@ must not be mistaken for it:
   `0xFF`. On Unbound this ends the move table at exactly 922 ("Rapid Flow"),
   where a naive scan ran 40 rows into item descriptions.
 
-Unbound v2.1.1.1 ships pre-mined (`Sources/Hexeon/Names/`, 42 KB): 1270 species
-and 922 move names, matched to a save by its footer magic, so it works with no
-ROM at all. **Only names are bundled, never a ROM.** Regenerate with:
+Unbound v2.1.1.1 ships pre-mined (`Sources/Hexeon/Names/`, 271 KB): 1270 species
+and 922 move names, 677 move stat blocks, 922 descriptions, 1268 learnsets and
+the TM list — matched to a save by its footer magic, so it works with no ROM at
+all. **Only names are bundled, never a ROM.** Regenerate with:
 
 ```bash
 HEXEON_ROM=/path/to/rom.gba \
@@ -99,6 +104,45 @@ HEXEON_ROM_OUT=Sources/Hexeon/Names/game.json \
 HEXEON_ROM_MAGIC=01121999 \
 swift test --filter minesRealROM
 ```
+
+## Move browsing and legality
+
+Importing a ROM mines more than names. Each table is found by content, never by
+address:
+
+| Table | How it's found |
+|---|---|
+| Species / move names | encoded "Bulbasaur"/"Pound", width measured from the next anchor |
+| Type names | "Normal" followed by "Fight" |
+| Move battle data | Pound (40 power, Normal, 100%, 35 PP) then Karate Chop, which also gives the stride |
+| Move descriptions | the pointer-to-text array whose entries actually describe the moves at those ids |
+| Level-up learnsets | the pointer array whose targets decode as (move, level) with ascending levels and a terminator |
+| TM/HM move list | the shortest valid move-id array containing the classic TM moves |
+
+Two findings worth recording, both from reading Unbound's bytes:
+
+- **Field order isn't vanilla's.** Unbound's move entry starts at power, not
+  effect, and carries a physical/special/status byte vanilla doesn't have. So the
+  anchor is the power/type/accuracy/PP run and everything else is read relative
+  to it.
+- **The effect byte can't identify stat moves.** Growl and Toxic share effect 22,
+  and both are category "status", so neither field separates "changes stats" from
+  "inflicts a status". The move's own *description* can — so the filter reads the
+  text, which also works for moves a hack invented.
+
+### What legality does and doesn't claim
+
+Only the level-up learnset could be located reliably; the per-species TM/HM
+compatibility bitfield was not found in the ROMs tested (candidates gave Bulbasaur
+zero TMs and Beldum Dragon Claw, so they were rejected rather than shipped). So:
+
+- in the learnset → shown with the level it's learned at
+- a TM/HM move → shown as **unverifiable**, never flagged
+- neither → flagged as *not in the level-up learnset*, worded as a warning
+- no learnset data for that species → nothing claimed
+
+Crying foul over a legitimate TM move would be worse than staying quiet, so the
+uncertainty is in the labels rather than hidden.
 
 ## Artwork, without a species table
 
@@ -151,7 +195,7 @@ Item/bag editing, box numbers and names, legality checks, species and move
 
 ```bash
 swift build             # library + app
-swift test              # 21 tests, no save file or ROM required
+swift test              # 26 tests, no save file or ROM required
 ./Scripts/bundle-app.sh # produces build/Hexeon.app
 ```
 
