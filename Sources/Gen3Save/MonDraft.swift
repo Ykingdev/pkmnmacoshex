@@ -4,7 +4,7 @@ import Foundation
 ///
 /// Gen 3 derives nature, and part of the ability, from the PID — so those aren't
 /// stored fields you can just overwrite. Setting `nature`, `abilityBit` or
-/// `isShiny` makes Hexeon search for a PID that satisfies all three at once and
+/// `isShiny` makes pkmnmacoshex search for a PID that satisfies all three at once and
 /// re-encrypt the payload under the new key. Everything else is a direct write.
 public struct MonDraft: Equatable, Sendable {
     public var nickname: String

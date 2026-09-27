@@ -76,7 +76,7 @@ struct InspectorView: View {
                             .frame(width: 140)
                         }
                         Toggle("Shiny", isOn: $draft.isShiny)
-                        Text("These three are encoded in the PID, so Hexeon searches for a PID satisfying all of them and re-encrypts the payload under the new key.")
+                        Text("These three are encoded in the PID, so pkmnmacoshex searches for a PID satisfying all of them and re-encrypts the payload under the new key.")
                             .font(.caption2).foregroundStyle(.secondary)
                     }
 
@@ -108,7 +108,7 @@ struct InspectorView: View {
                                 }
                             }
                         } else {
-                            unavailable("This save packs PC EVs in \(mon.storage.totalSize)-byte entries using a layout Hexeon hasn't decoded.")
+                            unavailable("This save packs PC EVs in \(mon.storage.totalSize)-byte entries using a layout pkmnmacoshex hasn't decoded.")
                         }
                     }
 
@@ -128,7 +128,7 @@ struct InspectorView: View {
                                 .foregroundStyle(.secondary)
                             }
                         } else {
-                            unavailable("PC moves live in the 12 undecoded bytes of this save's \(mon.storage.totalSize)-byte entry. Hexeon preserves them byte-for-byte instead of guessing.")
+                            unavailable("PC moves live in the 12 undecoded bytes of this save's \(mon.storage.totalSize)-byte entry. pkmnmacoshex preserves them byte-for-byte instead of guessing.")
                         }
                     }
                 }

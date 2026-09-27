@@ -6,12 +6,12 @@ cd "$(dirname "$0")/.."
 
 CONFIG="${1:-release}"
 swift build -c "$CONFIG"
-BIN="$(swift build -c "$CONFIG" --show-bin-path)/pkmnmacoshex"
-APP="build/pkmnmacoshex.app"
+BIN="$(swift build -c "$CONFIG" --show-bin-path)/Hexeon"
+APP="build/Hexeon.app"
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN" "$APP/Contents/MacOS/pkmnmacoshex"
+cp "$BIN" "$APP/Contents/MacOS/Hexeon"
 
 # Icon is drawn from code, so there is no binary asset to keep in the repo.
 swift Scripts/make-icon.swift >/dev/null
@@ -30,10 +30,10 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleName</key><string>pkmnmacoshex</string>
-  <key>CFBundleDisplayName</key><string>pkmnmacoshex</string>
-  <key>CFBundleIdentifier</key><string>dev.local.pkmnmacoshex</string>
-  <key>CFBundleExecutable</key><string>pkmnmacoshex</string>
+  <key>CFBundleName</key><string>Hexeon</string>
+  <key>CFBundleDisplayName</key><string>Hexeon</string>
+  <key>CFBundleIdentifier</key><string>dev.local.hexeon</string>
+  <key>CFBundleExecutable</key><string>Hexeon</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>0.1.0</string>

@@ -1,5 +1,5 @@
 #!/usr/bin/env swift
-// Draws pkmnmacoshex's Master Ball icon and writes AppIcon.icns.
+// Draws Hexeon's Master Ball icon and writes AppIcon.icns.
 // Vector-drawn with CoreGraphics — no image assets, no dependencies.
 //
 //   swift Scripts/make-icon.swift

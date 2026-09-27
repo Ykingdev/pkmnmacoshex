@@ -3,11 +3,11 @@ import UniformTypeIdentifiers
 import Gen3Save
 
 @main
-struct HexeonApp: App {
+struct PkmnMacOSHexApp: App {
     @State private var model = SaveModel()
 
     var body: some Scene {
-        WindowGroup("Hexeon") {
+        WindowGroup("pkmnmacoshex") {
             ContentView(model: model)
                 .frame(minWidth: 720, minHeight: 520)
         }
@@ -71,7 +71,7 @@ final class SaveModel {
     private var tablesFile: URL {
         let support = FileManager.default.urls(for: .applicationSupportDirectory,
                                               in: .userDomainMask)[0]
-        return support.appendingPathComponent("Hexeon/rom-tables.json")
+        return support.appendingPathComponent("pkmnmacoshex/rom-tables.json")
     }
 
     init() {

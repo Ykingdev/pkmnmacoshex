@@ -4,7 +4,7 @@ import Foundation
 
 /// Builds a save from scratch so the tests never need a real (personal) one.
 /// `sectionLengths` is the whole point: a romhack sums different amounts per
-/// section than vanilla does, and Hexeon must measure rather than assume.
+/// section than vanilla does, and pkmnmacoshex must measure rather than assume.
 struct SaveBuilder {
     var bytes = [UInt8](repeating: 0, count: 131_072)
     var magic: UInt32 = 0x0112_1999
@@ -217,18 +217,18 @@ private func unboundLikeSave(encoding: MonEncoding = .plain,
     #expect(encoded.last == Gen3Text.terminator)
 }
 
-/// Opt-in end-to-end check against a save on disk, so you can validate Hexeon
+/// Opt-in end-to-end check against a save on disk, so you can validate pkmnmacoshex
 /// on your own game without that save ever entering the repo.
 ///
-///   HEXEON_TEST_SAVE=/path/to/save.sav \
-///   HEXEON_TEST_INDEX=2 \
-///   HEXEON_TEST_EXPECT=/path/to/known-good-output.sav \
+///   PKMNMACOSHEX_TEST_SAVE=/path/to/save.sav \
+///   PKMNMACOSHEX_TEST_INDEX=2 \
+///   PKMNMACOSHEX_TEST_EXPECT=/path/to/known-good-output.sav \
 ///   swift test
-@Test(.enabled(if: ProcessInfo.processInfo.environment["HEXEON_TEST_SAVE"] != nil))
+@Test(.enabled(if: ProcessInfo.processInfo.environment["PKMNMACOSHEX_TEST_SAVE"] != nil))
 func realSaveMatchesKnownGoodOutput() throws {
     let env = ProcessInfo.processInfo.environment
-    var save = try Gen3SaveFile(contentsOf: URL(fileURLWithPath: env["HEXEON_TEST_SAVE"]!))
-    let index = Int(env["HEXEON_TEST_INDEX"] ?? "0") ?? 0
+    var save = try Gen3SaveFile(contentsOf: URL(fileURLWithPath: env["PKMNMACOSHEX_TEST_SAVE"]!))
+    let index = Int(env["PKMNMACOSHEX_TEST_INDEX"] ?? "0") ?? 0
 
     print("magic \(String(format: "%08X", save.magic)) · \(save.encoding.rawValue) · slot \(save.activeSlot) · PC slots \(save.boxStorage?.totalSize ?? 0)B")
     for mon in save.allMons {
@@ -241,7 +241,7 @@ func realSaveMatchesKnownGoodOutput() throws {
     #expect(save.party[index].isShiny)
     #expect(save.validatesChecksums(slot: save.activeSlot))
 
-    if let expected = env["HEXEON_TEST_EXPECT"] {
+    if let expected = env["PKMNMACOSHEX_TEST_EXPECT"] {
         let reference = [UInt8](try Data(contentsOf: URL(fileURLWithPath: expected)))
         #expect(save.bytes == reference, "output differs from the known-good file")
     }
@@ -251,7 +251,7 @@ func realSaveMatchesKnownGoodOutput() throws {
 // MARK: - PC storage
 
 /// Unbound stores PC entries in 58 bytes with the payload at +0x1C; vanilla uses
-/// 80 bytes at +0x20. Hexeon has to work out which from the bytes alone.
+/// 80 bytes at +0x20. pkmnmacoshex has to work out which from the bytes alone.
 private func saveWithBox(storage: MonStorage, encoding: MonEncoding,
                          count: Int = 3) throws -> Gen3SaveFile {
     var builder = SaveBuilder()
@@ -505,14 +505,14 @@ func minesNameTablesAtAnyWidthOrCase(speciesWidth: Int, moveWidth: Int, uppercas
 /// Opt-in: mine a real ROM and optionally dump the tables as JSON, which is how
 /// the bundled name data in this repo was produced.
 ///
-///   HEXEON_ROM=/path/to/rom.gba HEXEON_ROM_OUT=Sources/Hexeon/Names/game.json \
-///   HEXEON_ROM_MAGIC=01121999 swift test --filter minesRealROM
-@Test(.enabled(if: ProcessInfo.processInfo.environment["HEXEON_ROM"] != nil))
+///   PKMNMACOSHEX_ROM=/path/to/rom.gba PKMNMACOSHEX_ROM_OUT=Sources/pkmnmacoshex/Names/game.json \
+///   PKMNMACOSHEX_ROM_MAGIC=01121999 swift test --filter minesRealROM
+@Test(.enabled(if: ProcessInfo.processInfo.environment["PKMNMACOSHEX_ROM"] != nil))
 func minesRealROM() throws {
     let env = ProcessInfo.processInfo.environment
-    let url = URL(fileURLWithPath: env["HEXEON_ROM"]!)
+    let url = URL(fileURLWithPath: env["PKMNMACOSHEX_ROM"]!)
     var tables = try RomTables.mine(romAt: url)
-    if let magic = env["HEXEON_ROM_MAGIC"], let value = UInt32(magic, radix: 16) {
+    if let magic = env["PKMNMACOSHEX_ROM_MAGIC"], let value = UInt32(magic, radix: 16) {
         tables.saveMagic = value
     }
     print("\(tables.romName): \(tables.species.count) species, \(tables.moves.count) moves")
@@ -523,7 +523,7 @@ func minesRealROM() throws {
         print("  move \(id) = \(tables.moveName(id) ?? "—")")
     }
     #expect(!tables.isEmpty)
-    if let out = env["HEXEON_ROM_OUT"] {
+    if let out = env["PKMNMACOSHEX_ROM_OUT"] {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         try encoder.encode(tables).write(to: URL(fileURLWithPath: out))
@@ -535,7 +535,7 @@ func minesRealROM() throws {
 @Test func bundledUnboundNamesAreValid() throws {
     let repo = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-    let file = repo.appendingPathComponent("Sources/Hexeon/Names/unbound-v2.1.1.1.json")
+    let file = repo.appendingPathComponent("Sources/pkmnmacoshex/Names/unbound-v2.1.1.1.json")
     let tables = try JSONDecoder().decode(RomTables.self, from: try Data(contentsOf: file))
 
     #expect(tables.saveMagic == 0x0112_1999)          // Unbound's footer magic
@@ -554,9 +554,9 @@ func minesRealROM() throws {
     #expect(tables.species.values.allSatisfy { $0.first?.isUppercase == true })
 }
 
-@Test(.enabled(if: ProcessInfo.processInfo.environment["HEXEON_ROM"] != nil))
+@Test(.enabled(if: ProcessInfo.processInfo.environment["PKMNMACOSHEX_ROM"] != nil))
 func minesBattleDataAndLearnsets() throws {
-    let tables = try RomTables.mine(romAt: URL(fileURLWithPath: ProcessInfo.processInfo.environment["HEXEON_ROM"]!))
+    let tables = try RomTables.mine(romAt: URL(fileURLWithPath: ProcessInfo.processInfo.environment["PKMNMACOSHEX_ROM"]!))
     print("types \(tables.typeNames.count) · stats \(tables.moveStats.count) · descriptions \(tables.moveDescriptions.count) · learnsets \(tables.learnsets.count) · TMs \(tables.tmMoves.count)")
     for id in [UInt16(1), 33, 52, 86, 347] {
         if let s = tables.stats(forMove: id) {
@@ -638,7 +638,7 @@ private func handMadeTables() -> RomTables {
 @Test func bundledUnboundBattleDataIsValid() throws {
     let repo = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-    let file = repo.appendingPathComponent("Sources/Hexeon/Names/unbound-v2.1.1.1.json")
+    let file = repo.appendingPathComponent("Sources/pkmnmacoshex/Names/unbound-v2.1.1.1.json")
     let tables = try JSONDecoder().decode(RomTables.self, from: try Data(contentsOf: file))
 
     #expect(tables.moveStats.count > 600)

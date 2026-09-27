@@ -21,7 +21,7 @@ public enum Gen3Checksum {
 
     /// Every prefix length whose checksum equals `stored`.
     ///
-    /// This is how Hexeon supports romhacks without a per-hack table: the game
+    /// This is how pkmnmacoshex supports romhacks without a per-hack table: the game
     /// itself wrote a checksum over some fixed length we don't know, so we ask
     /// which lengths could have produced it. The true length is always in here.
     /// Trailing zero padding makes several lengths match, which is harmless —

@@ -33,7 +33,7 @@ extension RomTables {
 ///     and in the FireRed-based hacks (verified: Slowpoke is 79 in both),
 ///  3. the nickname — an un-renamed Pokémon is named after its species, so the
 ///     save effectively carries its own species table. Matches are remembered,
-///     so one un-renamed Flabébé teaches Hexeon what species 840 is for every
+///     so one un-renamed Flabébé teaches pkmnmacoshex what species 840 is for every
 ///     renamed one after it.
 ///
 /// Artwork is fetched on demand and cached under ~/Library/Caches, never bundled
@@ -60,9 +60,9 @@ final class SpriteLibrary {
 
     init() {
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        cacheDirectory = caches.appendingPathComponent("Hexeon/sprites", isDirectory: true)
+        cacheDirectory = caches.appendingPathComponent("pkmnmacoshex/sprites", isDirectory: true)
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        stateFile = support.appendingPathComponent("Hexeon/species-map.json")
+        stateFile = support.appendingPathComponent("pkmnmacoshex/species-map.json")
         try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
         try? FileManager.default.createDirectory(at: stateFile.deletingLastPathComponent(),
                                                  withIntermediateDirectories: true)

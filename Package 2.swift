@@ -2,15 +2,15 @@
 import PackageDescription
 
 let package = Package(
-    name: "pkmnmacoshex",
+    name: "Hexeon",
     platforms: [.macOS(.v14)],
     products: [
         .library(name: "Gen3Save", targets: ["Gen3Save"]),
-        .executable(name: "pkmnmacoshex", targets: ["pkmnmacoshex"]),
+        .executable(name: "Hexeon", targets: ["Hexeon"]),
     ],
     targets: [
         .target(name: "Gen3Save", swiftSettings: [.swiftLanguageMode(.v5)]),
-        .executableTarget(name: "pkmnmacoshex", dependencies: ["Gen3Save"],
+        .executableTarget(name: "Hexeon", dependencies: ["Gen3Save"],
                           resources: [.copy("Names")],
                           swiftSettings: [.swiftLanguageMode(.v5)]),
         .testTarget(name: "Gen3SaveTests", dependencies: ["Gen3Save"], swiftSettings: [.swiftLanguageMode(.v5)]),

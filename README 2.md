@@ -1,47 +1,16 @@
-# pkmnmacoshex
+# Hexeon
 
-<img src="docs/icon.png" width="128" align="right" alt="pkmnmacoshex icon">
+<img src="docs/icon.png" width="128" align="right" alt="Hexeon icon">
 
-A small, **native macOS** save editor for Game Boy Advance Pokémon saves —
-including **romhack saves that PKHeX can't open**.
+A small, native macOS save editor for Game Boy Advance Pokémon saves — including
+**romhack saves that PKHeX refuses to open**.
 
 ![Swift 6](https://img.shields.io/badge/Swift-6.0-orange) ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-blue) ![MIT](https://img.shields.io/badge/license-MIT-green)
 
-## Install
-
-**Download** — get `pkmnmacoshex.zip` from
-[Releases](https://github.com/Ykingdev/pkmnmacoshex/releases/latest), unzip, and
-drag `pkmnmacoshex.app` into Applications. Requires macOS 14 or later, Apple silicon or
-Intel.
-
-macOS will refuse to open it the first time. The app is ad-hoc signed but not
-notarized — that needs a paid Apple Developer account — so Gatekeeper treats it
-as unidentified. Once, either:
-
-- right-click `pkmnmacoshex.app` → **Open** → **Open** in the dialog, or
-- `xattr -dr com.apple.quarantine /Applications/pkmnmacoshex.app`
-
-After that it launches normally.
-
-**Or build it** — no dependencies beyond Xcode:
-
-```bash
-git clone https://github.com/Ykingdev/pkmnmacoshex.git
-cd pkmnmacoshex
-./Scripts/bundle-app.sh     # writes build/pkmnmacoshex.app, icon and all
-open build/pkmnmacoshex.app
-```
-
 ## Why this exists
 
-**There is no macOS build of PKHeX.** It's a .NET Windows Forms application, so
-on a Mac the options are Wine, CrossOver, or a Windows VM — a lot of scaffolding
-to flip one byte in a save file. pkmnmacoshex is a normal Mac app: double-click, open a
-save, export it.
-
-The second reason is romhacks. PKHeX is excellent and you should use it for
-retail games, but it assumes the vanilla Gen 3 save layout, and romhacks change
-that layout:
+PKHeX is excellent and you should use it for retail games. It assumes the
+vanilla Gen 3 save layout, though, and romhacks change that layout:
 
 | | Vanilla FR/LG/E | Pokémon Unbound |
 |---|---|---|
@@ -53,23 +22,23 @@ that layout:
 | PC entry size | 80 bytes, payload at `+0x20` | 58 bytes, payload at `+0x1C` |
 
 Every one of those is detected from the file. You don't pick a game, and a hack
-pkmnmacoshex has never seen works as long as it reuses one of these shapes.
+Hexeon has never seen works as long as it reuses one of these shapes.
 
 Edit such a save with a vanilla-assuming tool and it writes *correct-looking*
-checksums over the *wrong* byte ranges. The game then rejects the slot as corrupt
-and silently rolls back to your previous save — which is exactly how this project
-started: a Pokémon Unbound save, edited on a Mac, that the 3DS quietly refused.
+checksums over the *wrong* byte ranges. The game then rejects the slot as
+corrupt and silently rolls back to your previous save — which is exactly how
+this project started.
 
 ## The trick: measure, don't assume
 
-pkmnmacoshex never hardcodes a per-hack table. The game already wrote a checksum over
-some fixed length, so pkmnmacoshex asks **which prefix lengths could have produced
+Hexeon never hardcodes a per-hack table. The game already wrote a checksum over
+some fixed length, so Hexeon asks **which prefix lengths could have produced
 that checksum**, and intersects the answer across both save slots. The true
 length is always inside the resulting window.
 
 When writing a section back, it recomputes the checksum at every candidate
 length. If they all agree, it commits. If they disagree — meaning the edit
-touched bytes near a boundary pkmnmacoshex can't pin down — it **refuses and tells
+touched bytes near a boundary Hexeon can't pin down — it **refuses and tells
 you**, instead of handing your console a save it will reject.
 
 ```swift
@@ -87,7 +56,7 @@ print(save.lengthWindows[1]!) // measured candidate lengths for section 1
 - **Edits every field it can decode**: nickname, OT name, trainer and secret ID,
   species, held item, experience, friendship, level, IVs, EVs, moves and PP
 - **Nature, ability and shininess** — all three are encoded in the PID, so
-  pkmnmacoshex searches for a PID satisfying the combination you asked for and
+  Hexeon searches for a PID satisfying the combination you asked for and
   re-encrypts the payload under the new key
 - A **move browser**: search by name, filter by type, category or "changes
   stats", or narrow to what this species can actually learn — with each move's
@@ -110,7 +79,7 @@ ROM for Names…** (⌘R) mines them once and remembers them, so names keep work
 afterwards without the ROM present.
 
 Table addresses are never hardcoded, because that is exactly what breaks on every
-hack. Instead pkmnmacoshex finds each table by what it must contain: the encoded bytes
+hack. Instead Hexeon finds each table by what it must contain: the encoded bytes
 of "Bulbasaur" (or "Pound"), then the entry width measured from where "Ivysaur"
 lands, then confirmation from the next anchors. Widths and capitalisation differ
 per game and are both derived.
@@ -126,15 +95,15 @@ must not be mistaken for it:
   `0xFF`. On Unbound this ends the move table at exactly 922 ("Rapid Flow"),
   where a naive scan ran 40 rows into item descriptions.
 
-Unbound v2.1.1.1 ships pre-mined (`Sources/pkmnmacoshex/Names/`, 271 KB): 1270 species
+Unbound v2.1.1.1 ships pre-mined (`Sources/Hexeon/Names/`, 271 KB): 1270 species
 and 922 move names, 677 move stat blocks, 922 descriptions, 1268 learnsets and
 the TM list — matched to a save by its footer magic, so it works with no ROM at
 all. **Only names are bundled, never a ROM.** Regenerate with:
 
 ```bash
-PKMNMACOSHEX_ROM=/path/to/rom.gba \
-PKMNMACOSHEX_ROM_OUT=Sources/pkmnmacoshex/Names/game.json \
-PKMNMACOSHEX_ROM_MAGIC=01121999 \
+HEXEON_ROM=/path/to/rom.gba \
+HEXEON_ROM_OUT=Sources/Hexeon/Names/game.json \
+HEXEON_ROM_MAGIC=01121999 \
 swift test --filter minesRealROM
 ```
 
@@ -186,14 +155,14 @@ artwork in three steps, cheapest first:
 2. ids ≤ 251, which equal National Dex numbers in every Gen 3 game and in
    FireRed-based hacks (Slowpoke is 79 in both);
 3. **the nickname** — an un-renamed Pokémon is named after its species, so the
-   save carries its own species table. One un-renamed Flabébé teaches pkmnmacoshex what
+   save carries its own species table. One un-renamed Flabébé teaches Hexeon what
    species 840 is, for every renamed one afterwards.
 
 A mined ROM supersedes all three, since it names every species including renamed
 ones.
 
 Artwork is the Pokémon HOME renders from [PokeAPI/sprites](https://github.com/PokeAPI/sprites),
-fetched on demand and cached under `~/Library/Caches/pkmnmacoshex`. Nothing is bundled:
+fetched on demand and cached under `~/Library/Caches/Hexeon`. Nothing is bundled:
 it keeps the app at a few hundred KB, and an open-source repo has no business
 redistributing someone else's renders. No network, no artwork — everything else
 still works.
@@ -202,7 +171,7 @@ still works.
 
 The PC is logically one buffer spread over sections 5–13, but where it splits
 depends on per-section lengths a hack may change. Rather than reassemble it,
-pkmnmacoshex scans each section for entries that validate as stored Pokémon and locks
+Hexeon scans each section for entries that validate as stored Pokémon and locks
 onto the stride it finds. The cost: an entry whose header straddles a section
 boundary is skipped, and the app tells you how many.
 
@@ -229,7 +198,7 @@ Item/bag editing, box numbers and names, legality checks, species and move
 ```bash
 swift build             # library + app
 swift test              # 26 tests, no save file or ROM required
-./Scripts/bundle-app.sh # produces build/pkmnmacoshex.app, icon included
+./Scripts/bundle-app.sh # produces build/Hexeon.app, icon included
 swift Scripts/make-icon.swift   # redraw the icon on its own
 ```
 
@@ -240,8 +209,8 @@ from the games.
 Validate against your own save without committing it anywhere:
 
 ```bash
-PKMNMACOSHEX_TEST_SAVE=~/backups/mysave.sav \
-PKMNMACOSHEX_TEST_INDEX=2 \
+HEXEON_TEST_SAVE=~/backups/mysave.sav \
+HEXEON_TEST_INDEX=2 \
 swift test --filter realSaveMatchesKnownGoodOutput
 ```
 
@@ -250,14 +219,14 @@ swift test --filter realSaveMatchesKnownGoodOutput
 1. Launch the game, then exit to HOME so the save flushes.
 2. Boot GodMode9, go to `[S:] SYSNAND VIRTUAL` → `agbsave.bin` → `A` →
    **AGBSAVE options** → **Dump GBA VC save**. It lands in `0:/gm9/out/`.
-3. Edit it with pkmnmacoshex on your Mac.
+3. Edit it with Hexeon on your Mac.
 4. To put it back: in GodMode9, highlight the file and press **Y** to copy it to
    the clipboard (the inject reads from there, not a file picker), then
    `agbsave.bin` → **AGBSAVE options** → **Inject GBA VC save**.
 
 ## Safety
 
-Back up before you inject. pkmnmacoshex only ever writes to the active slot, leaving
+Back up before you inject. Hexeon only ever writes to the active slot, leaving
 the other slot as a rollback, and always exports to a new file. The `.gitignore`
 excludes `*.sav` so you can't accidentally publish your own save.
 
