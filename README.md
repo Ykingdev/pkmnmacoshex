@@ -11,7 +11,9 @@ including **romhack saves that PKHeX can't open**.
 
 **Download** — get `pkmnmacoshex.zip` from
 [Releases](https://github.com/Ykingdev/pkmnmacoshex/releases/latest), unzip, and
-drag `pkmnmacoshex.app` into Applications. Requires macOS 14 or later, Apple silicon or
+drag `pkmnmacoshex.app` into Applications. Take the `pkmnmacoshex.zip` asset, not
+the "Source code" archives GitHub adds automatically — those hold the source, no
+app. Requires macOS 14 or later, Apple silicon or
 Intel.
 
 macOS will refuse to open it the first time. The app is ad-hoc signed but not

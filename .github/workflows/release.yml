@@ -1,0 +1,32 @@
+name: Release
+
+# Builds the app and attaches it to the release. Without this, a GitHub release
+# only carries the automatic "Source code" archives, which contain no app.
+on:
+  push:
+    tags: ["*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run tests
+        run: swift test
+
+      - name: Build app bundle
+        run: ./Scripts/bundle-app.sh release
+
+      - name: Zip the app
+        # ditto preserves the bundle structure and signature; zip(1) does not.
+        run: ditto -c -k --keepParent build/pkmnmacoshex.app build/pkmnmacoshex.zip
+
+      - name: Attach to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/pkmnmacoshex.zip
+          fail_on_unmatched_files: true
